@@ -37,11 +37,6 @@ class pledgeQuiz
 
 		@pledgesLeft = @storage.pledges
 
-		@questions = 
-			[selectPledge() + " and " + selectPledge() + "tell me the Greek AlphaBet", 
-			selectPledge + " tell me the lineage of " + selectAcive(), 
-			selectPledge() + " and " + selectPledge() + " tell me all of " + selectClass()]
-
 	checkPermission: (msg) ->
 		if @admins.length == 0 || msg.message.user.name in @admins
 			return true
@@ -53,9 +48,19 @@ class pledgeQuiz
 		@robot.logger.debug "Saving Pledge Quiz Data: " + JSON.stringify(@storage)
 		@robot.brain.emit 'save'
 
+	askQuestion: (msg) ->
+		questions = 
+			[selectPledge() + " and " + selectPledge() + "tell me the Greek AlphaBet", 
+			selectPledge + " tell me the lineage of " + selectAcive(),  
+			selectPledge + " tell me the lineage of " + selectAcive(),
+			selectPledge + " tell me the lineage of " + selectAcive(),
+			selectPledge() + " and " + selectPledge() + " tell me all of " + selectClass()]
+
+		msg.send questions[@curQuestion]
+
 	selectPledge = () ->
 		pledge = @pledgesLeft[Math.floor(Math.random() * @pledgesLeft.length)]
-		@pledgesLeft.splice(@pledgesLeft.indexOf(firstPledge), 1)
+		@pledgesLeft.splice(@pledgesLeft.indexOf(pledge), 1)
 		return pledge
 
 	selectActive = () ->
@@ -86,7 +91,7 @@ class pledgeQuiz
 		msg.send "Welcome Pledges to Quiz Time!"
 		msg.send "Good luck and may the odds forever be in your favor!"
 		@curQuestion = 0;
-		msg.send @questions[curQuestion]
+		askQuestion()
 		@curQuestion = @curQuestion + 1
 
 	stopQuiz: (msg) ->
@@ -189,7 +194,6 @@ class pledgeQuiz
 module.exports = (robot) ->
 
 	quiz = new pledgeQuiz robot
-	msg.send "Hello"
 	# super janky way to pass data to methods bc random things are undefined
 	# for no apparent reason
 	checkMessage = (msg, cmd, data = null, data2 = null) ->
@@ -210,7 +214,11 @@ module.exports = (robot) ->
 		msg.send "Invalid command, say \"quiz help\" for help"
 
 	robot.hear /^\s*quiz (.*)/i, (msg) ->
-		cmd = msg.match[1]
+		msg.send "Testing"
+		@comd = msg.match[1]
+		cmd = @comd.split " ", 1
+		msg.send @comd
+		msg.send cmd
 		switch cmd
 			when "start" then checkMessage msg, quiz.startQuiz
 			when "stop" then checkMessage msg, quiz.stoptQuiz            
