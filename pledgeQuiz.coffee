@@ -18,19 +18,18 @@
 #   Cameron Piel
 
 class pledgeQuiz
-	
 	constructor: (@robot) ->
 		storageLoaded = =>
-			@storage = @robot.brain.data.pledgeQuiz ||= {
-				members: {}
-				pledges: {}
-				classes: {}
+			@storage = @robot.brain.data.quiz ||= {
+				members: []
+				pledges: []
+				classes: []
 			}
 			@robot.logger.debug "quizMe data loaded: " + JSON.stringify(@storage)
 
-		@channels = ["pledges", "shell"]
+		@channels = ["pledges", "Shell"]
 
-		@admins = ["sexapiel", "stotmeister", "davidtalamas", "shell"]
+		@admins = ["sexapiel", "stotmeister", "davidtalamas", "Shell"]
 
 		@robot.brain.on "loaded", storageLoaded
 		storageLoaded()
@@ -69,19 +68,21 @@ class pledgeQuiz
 	selectClass = () ->
 		return @storage.classes[Math.floor(Math.random() * @storage.classes.length)]
 
-	isMember = (user) ->
-		for member in @storage.members
-			if member == user
+	isMember = (msg, subject) ->
+		for member, user of @storage.members
+			#msg.send ("Cameron Piel" == member) + member + " " + subject
+			if member == subject
+				msg.send "hello"
 				return true
 		return false
 
-	isPledge = (user) ->
+	isPledge = (msg, user) ->
 		for pledge in @storage.pledges
 			if pledge == user
 				return true
 		return false
 
-	isClass = (user) ->
+	isClass = (msg, user) ->
 		for year in @storage.classes
 			if year == user
 				return true
@@ -95,7 +96,15 @@ class pledgeQuiz
 		@curQuestion = @curQuestion + 1
 
 	stopQuiz: (msg) ->
-		msg.send "Hello"
+		msg.send selectAcive
+		msg.send selectAcive
+		msg.send selectAcive
+		msg.send selectClass
+		msg.send selectPledge
+		msg.send selectPledge
+		msg.send selectPledge
+		msg.send selectPledge
+		msg.send selectPledge
 
 	correct: (msg) ->
 		msg.send "Congradulations on getting the question right!"
@@ -106,79 +115,112 @@ class pledgeQuiz
 		msg.send @question[curQuestion]
 
 	addMember: (msg) ->
-		user = msg.message.user.name.toLowerCase()
-		if isMember(user)
-			msg.send "That person is already a member"
-		@storage.members[user] = 1.0
+		user = msg.match[1].split(" ")[1] + " " + msg.match[1].split(" ")[2]
+		try
+			if not isMember(msg, user)
+				@storage.members[user] = 1.0
+				msg.send "Added member " + user
+			else
+				msg.send "Already a Member"
+		catch
+			@storage.members = []
+			@storage.members[user] = 1.0
+			msg.send "Forced added member " + user
+		finally
+			@save
+		
  
 	addPledge: (msg) ->
-		user = msg.message.user.name.toLowerCase()
-		if isPledge(user)
-			msg.send "That person is already a pledge"
-		@storage.pledges[user] = 1.0
+		user = msg.match[1].split(" ")[1] + " " + msg.match[1].split(" ")[2]
+		try
+			if not isPledge(msg, user)
+				@storage.pledges[user] = 1.0
+			else
+				msg.send "Already a Pledge"
+		catch
+			@storage.pledges = []
+			@storage.pledges[user] = 1.0
+		finally
+			@save
 
 	addClass: (msg) ->
-		user = msg.message.user.name.toLowerCase()
-		if isClass(user)
-			msg.send "That is already a class"
-		@storage.classes[user] = 1.0
+		user = msg.match[1].split(" ")[1]
+		try
+			if not isClass(msg, user)
+				@storage.classes[user] = 1.0
+			else
+				msg.send "Already a Class"
+		catch
+			@storage.classes = []
+			@storage.classes[user] = 1.0
+		finally
+			@save
 
 	removeMember: (msg) ->
-		user = msg.message.user.name.toLowerCase()
-		if isMember(user)
-			delete @storage.members[user]
-			msg.send "They have been removed as a member"
-		else
-			msg.send "They are not a user"
+		user = msg.match[1].split(" ")[1] + " " + msg.match[1].split(" ")[2]
+		#if isMember(user)
+		delete @storage.members[user]
+		#	msg.send "They have been removed as a member"
+		#else
+		#	msg.send "They are not a user"
 
 	removePledge: (msg) ->
-		user = msg.message.user.name.toLowerCase()
-		if isPledge(user)
-			delete @storage.pledges[user]
-			msg.send "They have been removed as a pledge"
-		else
-			msg.send "They are not a pledge"
+		user = msg.match[1].split(" ")[1] + " " + msg.match[1].split(" ")[2]
+		#if isPledge(user)
+		delete @storage.pledges[user]
+		#	msg.send "They have been removed as a pledge"
+		#else
+		#	msg.send "They are not a pledge"
 	
 	removeClass: (msg) ->
-		user = msg.message.user.name.toLowerCase()
-		if isClass(user)
-			delete @storage.classes[user]
-			msg.send "It have been removed as a class"
-		else
-			msg.send "It is not a class"
+		user = msg.match[1].split(" ")[1]
+		#if isClass(user)
+		delete @storage.classes[user]
+		#	msg.send "It have been removed as a class"
+		#else
+		#	msg.send "It is not a class"
 	
 	clearMembers: (msg) ->
-		if Objects.keys(@storage.memebers).length > 0
-			@storage.memebers = {}
-			@save
-			msg.send "Members cleared"
-		else
-			msg.send "There are no memebers to clear"
+		#if @storage.members.length > 0
+		@storage.members = []
+		@save
+		msg.send "Members cleared"
+		#else
+			#msg.send "There are no members to clear"
 	
 	clearPledges: (msg) ->
-		if Objects.keys(@storage.pledges).length > 0
-			@storage.pledges = {}
-			@save
-			msg.send "Pledges cleared"
-		else
-			msg.send "There are no pledges to clear"
+		@storage.pledges = []
+		@save
+		msg.send "Pledges cleared"
 	
 	clearClasses: (msg) ->
-		if Objects.keys(@storage.classes).length > 0
-			@storage.classes = {}
-			@save
-			msg.send "Classes cleared"
-		else
-			msg.send "There are no classes to clear"
+		@storage.classes = []
+		@save
+		msg.send "Classes cleared"
 
 	results: (msg) ->
-		msg.send "Hi"
+		str = "Members:"
+		for member, user of @storage.members
+            str = str + "\n#{member}"
+        msg.send str + "\n"
+        
+        str = "Pledges:"
+		for pledge, user of @storage.pledges
+            str = str + "\n#{pledge}"
+        msg.send str + "\n"
+        
+        str = "Classes:"
+		for year, user of @storage.classes
+            str = str + "\n#{year}"
+        msg.send str + "\n"
 	
+	validChannel: (channel) -> @channels.length == 0 || channel in @channels
+
 	printHelp: (msg) ->
 		msg.send """
 		quiz start - start the quiz with weighted odds
 		quiz correct - gives the selected pledges a correct response for the 	current question and moves on to the next question
-		quiz incorrect - gives the slected pledges an incorrect response for 	the current question and moves on to the next question
+		quiz incorrect - gives the slected pledges an incorrect response for the 	current question and moves on to the next question
 		quiz addMember ___ - adds a person to the memeber list
 		quiz addPledge ___ - adds a person to the pledge list
 		quiz addClass ___ - adds a class to the list
@@ -189,22 +231,16 @@ class pledgeQuiz
 		quiz clearPledge - clears the pledge list
 		quiz clearClass - clears the class list
 		quiz results - prints the list of all what 
-			questions the pledges have 	left
+			questions the pledges have left
 		 """
 module.exports = (robot) ->
 
-	quiz = new pledgeQuiz robot
-	# super janky way to pass data to methods bc random things are undefined
-	# for no apparent reason
-	checkMessage = (msg, cmd, data = null, data2 = null) ->
-		if quiz.validChannel msg
-			if data
-				if data2
-					cmd msg, data, data2
-				else
-					cmd msg, data
-			else
-				cmd msg
+	quiz = new pledgeQuiz(robot)
+
+	checkMessage = (msg, cmd) ->
+		if quiz.validChannel msg.message.user.room
+			cmd msg
+		else msg.send "You must be in a valid channel to use this command"
 
 	checkRestrictedMessage = (msg, cmd) ->
 		if quiz.checkPermission msg
@@ -214,11 +250,7 @@ module.exports = (robot) ->
 		msg.send "Invalid command, say \"quiz help\" for help"
 
 	robot.hear /^\s*quiz (.*)/i, (msg) ->
-		msg.send "Testing"
-		@comd = msg.match[1]
-		cmd = @comd.split " ", 1
-		msg.send @comd
-		msg.send cmd
+		cmd = msg.match[1].split(" ")[0]
 		switch cmd
 			when "start" then checkMessage msg, quiz.startQuiz
 			when "stop" then checkMessage msg, quiz.stoptQuiz            
