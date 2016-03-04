@@ -34,7 +34,8 @@ class pledgeQuiz
 		@robot.brain.on "loaded", storageLoaded
 		storageLoaded()
 
-		@pledgesLeft = @storage.pledges
+		@curCandidates = []
+		@activeQuiz = false
 
 	checkPermission: (msg) ->
 		if @admins.length == 0 || msg.message.user.name in @admins
@@ -47,146 +48,152 @@ class pledgeQuiz
 		@robot.logger.debug "Saving Pledge Quiz Data: " + JSON.stringify(@storage)
 		@robot.brain.emit 'save'
 
-	askQuestion: (msg) ->
+	askQuestion = (msg) ->
+		
+
+		if(@curCandidates.length == 0)
+			getCandidate(msg)
+
 		questions = 
-			[selectPledge() + " and " + selectPledge() + "tell me the Greek AlphaBet", 
-			selectPledge + " tell me the lineage of " + selectAcive(),  
-			selectPledge + " tell me the lineage of " + selectAcive(),
-			selectPledge + " tell me the lineage of " + selectAcive(),
-			selectPledge() + " and " + selectPledge() + " tell me all of " + selectClass()]
+			[@curCandidates[0] + " and " + @curCandidates[1] + " tell me the Greek AlphaBet", 
+			@curCandidates[2] + " tell me the lineage of " + selectActive(),  
+			@curCandidates[3] + " tell me the lineage of " + selectActive(),
+			@curCandidates[4] + " tell me the lineage of " + selectActive(),
+			@curCandidates[5] + " and " + @curCandidates[6] + " tell me all of " + selectClass()]
+		return questions[@curQuestion]
 
-		msg.send questions[@curQuestion]
+	getCandidate = (msg) ->
+		x = 6
+		while (x >= 0)
+			ques = 0
+			if (x == 6 || x == 5)
+				ques = 0
+			else if (x <= 2 && x >= 4)
+				ques = 1
+			else if (x == 1 || x == 0)
+				ques = 2
+			pledge = selectPledge()
+			while ((pledge in @curCandidates) || !@storage.pledges[pledge][ques])
+				if (!@storage.pledges[pledge][ques])
+					msg.send "Got one Coach! " + pledge
+				pledge = selectPledge()	
+			@curCandidates.push (pledge)
+			x -= 1
+		return true
 
-	selectPledge = () ->
-		pledge = @pledgesLeft[Math.floor(Math.random() * @pledgesLeft.length)]
-		@pledgesLeft.splice(@pledgesLeft.indexOf(pledge), 1)
+
+	selectPledge = (msg) ->
+		getPledge = []
+		for pledge, user of @storage.pledges
+			getPledge.push(pledge)
+		pledge = getPledge[Math.floor(Math.random() * getPledge.length)]
+
 		return pledge
 
-	selectActive = () ->
-		return @storage.members[Math.floor(Math.random() * @storage.members.length)]
-
-	selectClass = () ->
-		return @storage.classes[Math.floor(Math.random() * @storage.classes.length)]
-
-	isMember = (msg, subject) ->
+	selectActive = (msg) ->
+		getUser = []
 		for member, user of @storage.members
-			#msg.send ("Cameron Piel" == member) + member + " " + subject
-			if member == subject
-				msg.send "hello"
-				return true
-		return false
+			getUser.push(member)
+		return getUser[Math.floor(Math.random() * getUser.length)]
 
-	isPledge = (msg, user) ->
-		for pledge in @storage.pledges
-			if pledge == user
-				return true
-		return false
+	selectClass = (msg) ->
+		getClass = []
+		for year, user of @storage.classes
+			getClass.push(year)
+		return getClass[Math.floor(Math.random() * getClass.length)]
 
-	isClass = (msg, user) ->
-		for year in @storage.classes
-			if year == user
+	isUser = (object, st) ->
+		for subject, user of st
+			if subject == object
 				return true
 		return false
 
 	startQuiz: (msg) ->
+		@activeQuiz = true
+		@curQuestion = 0
+		@curCandidates = []
 		msg.send "Welcome Pledges to Quiz Time!"
 		msg.send "Good luck and may the odds forever be in your favor!"
-		@curQuestion = 0;
-		askQuestion()
-		@curQuestion = @curQuestion + 1
+		msg.send askQuestion(msg)
 
-	stopQuiz: (msg) ->
-		msg.send selectAcive
-		msg.send selectAcive
-		msg.send selectAcive
-		msg.send selectClass
-		msg.send selectPledge
-		msg.send selectPledge
-		msg.send selectPledge
-		msg.send selectPledge
-		msg.send selectPledge
+	stopQuiz = (msg) ->
+		@activeQuiz = false
+		@curQuestion = 0
+		@curCandidates = []
+		return true
 
 	correct: (msg) ->
-		msg.send "Congradulations on getting the question right!"
-		msg.send @question[curQuestion]
+		if(@activeQuiz)
+			msg.send "Congradulations on getting the question right!"
+			if (@curQuestion == 0)
+				@storage.pledges[@curCandidates[0]][0] = false
+				@storage.pledges[@curCandidates[1]][0] = false
+			else if (@curQuestion <= 3 && @curQuestion >= 1)
+				@storage.pledges[@curCandidates[@curQuestion + 1]][1] = false
+				msg.send @curCandidates[@curQuestion + 1]
+			else if (@curQuestion == 4)
+				@storage.pledges[@curCandidates[6]][2] = false
+
+			if(@curQuestion <=3)
+				@curQuestion = @curQuestion + 1
+				msg.send askQuestion(msg)
+			else
+				stopQuiz(msg)
+		else
+			msg.send "There is not a quiz currently."
 
 	incorrect: (msg) ->
-		msg.send "Well, you tried"
-		msg.send @question[curQuestion]
+		if(@activeQuiz)
+			msg.send "Well, you tried"
+			if(@curQuestion <=3)
+				@curQuestion = @curQuestion + 1
+				msg.send askQuestion(msg)
+			else
+				stopQuiz(msg)
+		else
+			msg.send "There is not a quiz currently."
+
+	add = (msg, st) ->
+		cmd = msg.match[1].split(" ")
+		user = cmd[1] + " " + cmd[2]
+		try
+			if not isUser(user, st)
+				st[user] = [true,true,true]
+				msg.send "Added " + user
+			else
+				msg.send user + " is already on the List"
+		catch
+			st = []
+			st[user] = [true,true,true]
+			msg.send "Added " + user
+
+		return st
 
 	addMember: (msg) ->
-		user = msg.match[1].split(" ")[1] + " " + msg.match[1].split(" ")[2]
-		try
-			if not isMember(msg, user)
-				@storage.members[user] = 1.0
-				msg.send "Added member " + user
-			else
-				msg.send "Already a Member"
-		catch
-			@storage.members = []
-			@storage.members[user] = 1.0
-			msg.send "Forced added member " + user
-		finally
-			@save
-		
+		@storage.members = add(msg, @storage.members)
+		@save
  
 	addPledge: (msg) ->
-		user = msg.match[1].split(" ")[1] + " " + msg.match[1].split(" ")[2]
-		try
-			if not isPledge(msg, user)
-				@storage.pledges[user] = 1.0
-			else
-				msg.send "Already a Pledge"
-		catch
-			@storage.pledges = []
-			@storage.pledges[user] = 1.0
-		finally
-			@save
+		@storage.pledges = add(msg, @storage.pledges)
+		@save
 
 	addClass: (msg) ->
-		user = msg.match[1].split(" ")[1]
-		try
-			if not isClass(msg, user)
-				@storage.classes[user] = 1.0
-			else
-				msg.send "Already a Class"
-		catch
-			@storage.classes = []
-			@storage.classes[user] = 1.0
-		finally
-			@save
+		@storage.classes = add(msg, @storage.classes)
+		@save
 
 	removeMember: (msg) ->
-		user = msg.match[1].split(" ")[1] + " " + msg.match[1].split(" ")[2]
-		#if isMember(user)
 		delete @storage.members[user]
-		#	msg.send "They have been removed as a member"
-		#else
-		#	msg.send "They are not a user"
 
 	removePledge: (msg) ->
-		user = msg.match[1].split(" ")[1] + " " + msg.match[1].split(" ")[2]
-		#if isPledge(user)
 		delete @storage.pledges[user]
-		#	msg.send "They have been removed as a pledge"
-		#else
-		#	msg.send "They are not a pledge"
-	
+
 	removeClass: (msg) ->
-		user = msg.match[1].split(" ")[1]
-		#if isClass(user)
 		delete @storage.classes[user]
-		#	msg.send "It have been removed as a class"
-		#else
-		#	msg.send "It is not a class"
 	
 	clearMembers: (msg) ->
-		#if @storage.members.length > 0
 		@storage.members = []
 		@save
 		msg.send "Members cleared"
-		#else
-			#msg.send "There are no members to clear"
 	
 	clearPledges: (msg) ->
 		@storage.pledges = []
@@ -244,7 +251,7 @@ module.exports = (robot) ->
 
 	checkRestrictedMessage = (msg, cmd) ->
 		if quiz.checkPermission msg
-			checkMessage msg, cmd
+			checkMessage(msg, cmd)
 
 	robot.hear /^\s*quiz\s*$/i, (msg) ->
 		msg.send "Invalid command, say \"quiz help\" for help"
@@ -252,19 +259,33 @@ module.exports = (robot) ->
 	robot.hear /^\s*quiz (.*)/i, (msg) ->
 		cmd = msg.match[1].split(" ")[0]
 		switch cmd
-			when "start" then checkMessage msg, quiz.startQuiz
-			when "stop" then checkMessage msg, quiz.stoptQuiz            
-			when "correct" then checkMessage msg, quiz.correct
-			when "incorrect" then checkMessage msg, quiz.incorrect
-			when "addMember" then checkMessage msg, quiz.addMember
-			when "addPledge" then checkMessage msg, quiz.addPledge
-			when "addClass" then checkMessage msg, quiz.addClass
-			when "removeMember" then checkMessage msg, quiz.removeMember
-			when "removePledge" then checkMessage msg, quiz.removePledge
-			when "removeClass" then checkMessage msg, quiz.removeClass
-			when "clearMembers" then checkRestrictedMessage msg, quiz.clearMembers
-			when "clearPledges" then checkRestrictedMessage msg, quiz.clearPledges
-			when "clearClasses" then checkRestrictedMessage msg, quiz.clearClasses
-			when "results" then checkRestrictedMessage msg, quiz.results
+			when "start" 
+				return checkRestrictedMessage(msg, quiz.startQuiz)
+			when "stop" 
+				return checkRestrictedMessage(msg, quiz.stopQuiz)
+			when "correct" 
+				return checkRestrictedMessage(msg, quiz.correct)
+			when "incorrect" 
+				return checkRestrictedMessage(msg, quiz.incorrect)
+			when "addMember"
+				return checkRestrictedMessage(msg, quiz.addMember)
+			when "addPledge"
+				return checkRestrictedMessage(msg, quiz.addPledge)
+			when "addClass" 
+				return checkRestrictedMessage(msg, quiz.addClass)
+			when "removeMember" 
+				return checkRestrictedMessage(msg, quiz.removeMember)
+			when "removePledge" 
+				return checkRestrictedMessage(msg, quiz.removePledge)
+			when "removeClass" 
+				return checkRestrictedMessage(msg, quiz.removeClass)
+			when "clearMembers"
+				return checkRestrictedMessage(msg, quiz.clearMembers)
+			when "clearPledges" 
+				return checkRestrictedMessage(msg, quiz.clearPledges)
+			when "clearClasses" 
+				return checkRestrictedMessage(msg, quiz.clearClasses)
+			when "results"
+				return checkRestrictedMessage(msg, quiz.results)
 			when "help" then quiz.printHelp msg
 			else msg.send "Invalid command, say \"quiz help\" for help"
